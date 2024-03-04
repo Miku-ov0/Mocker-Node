@@ -3,7 +3,10 @@ import { Api } from '../entity/api.entity';
 import { Context } from '@midwayjs/koa';
 import { Repository } from 'typeorm';
 import AntPathMatcher = require('ant-path-matcher');
+import { pathToRegexp, Key } from 'path-to-regexp';
 import { InjectEntityModel } from '@midwayjs/typeorm';
+import { ResHandlerFactory } from '../handler/res.handler'
+import { ResType } from "../enums/res.type"
 
 @Provide()
 @Scope(ScopeEnum.Singleton)
@@ -16,7 +19,7 @@ export class ApiServerService {
     @InjectEntityModel(Api)
     apiModel: Repository<Api>;
 
-    apiMap: Map<string, string> = new Map();
+    apiMap: Map<string, Api> = new Map();
 
     @Init()
     async init() {
@@ -28,7 +31,7 @@ export class ApiServerService {
         const apis = await this.apiModel.find({ where: { enabled: true } })
         this.apiMap.clear()
         apis.forEach(api => {
-            this.apiMap.set(api.path + ApiServerService.SPLITOR + api.method, api.response)
+            this.apiMap.set(api.path + ApiServerService.SPLITOR + api.method, api)
         })
         console.log(this.apiMap)
     }
@@ -41,25 +44,56 @@ export class ApiServerService {
         const { method } = ctx.request
         // console.log(this.apiMap);
 
-        let response =
+        let api =
             this.apiMap.get(pathname + ApiServerService.SPLITOR + method) ||
-            this.apiMap.get(path + ApiServerService.SPLITOR + method) ||
-            this.apiMap.get(pathname + ApiServerService.SPLITOR + ApiServerService.ALL_METHOD) ||
-            this.apiMap.get(path + ApiServerService.SPLITOR + ApiServerService.ALL_METHOD)
+            this.apiMap.get(path + ApiServerService.SPLITOR + method)
 
-        if (!response) {
+        if (!api) {
             this.apiMap.forEach((v, k) => {
-                console.log("k = ", k, ", path = ", path, ", pathname = ", pathname)
-                if (ApiServerService.MATCHER.match(k, pathname + ApiServerService.SPLITOR + method)) {
-                    console.log(k + ' matchd ' + pathname)
-                    response = v
-                }
-                if (ApiServerService.MATCHER.match(k, path + ApiServerService.SPLITOR + method)) {
-                    console.log(k + ' matchd ' + path)
-                    response = v
+                console.log("k = ", k, ", path = ", path, ", pathname = ", path + ApiServerService.SPLITOR + method)
+                if (pathToRegexp(k).exec(path + ApiServerService.SPLITOR + method)) {
+                    console.log(k + ' matched ' + path)
+                    api = v
+                    return
                 }
             })
         }
-        return response
+
+        if (api) {
+            console.log('matched', api)
+            const handler = ResHandlerFactory.getResHandler(ResType[api.resType])
+            if (handler) {
+                const pathVariables = this.getPathParams(api.path, path)
+                const params = {
+                    req: {
+                        ctx,
+                        query: ctx.query,
+                        body: ctx.request.body,
+                        headers: ctx.headers,
+                        path,
+                        pathname,
+                        method,
+                        pathVariables
+                    }
+                }
+                console.log(handler, handler.handle(api.response, params))
+                return handler.handle(api.response, params) || 'response handle error'
+            }
+        }
     }
+
+    getPathParams(path: string, url: string): { [key: string]: string } | null {
+        const keys: Key[] = [];
+        const regexp = pathToRegexp(path, keys);
+        const match = regexp.exec(url);
+      
+        if (match) {
+          return keys.reduce((params: { [key: string]: string }, key: Key, index: number) => {
+            params[key.name] = match[index + 1];
+            return params;
+          }, {});
+        }
+      
+        return null;
+      }
 }
