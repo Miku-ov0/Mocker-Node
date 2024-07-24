@@ -36,6 +36,7 @@ export class ApiService {
       .where(param)
       .skip(page * size)
       .take(size)
+      .orderBy({"id": "DESC"})
       .getManyAndCount()
 
     return {

@@ -7,7 +7,9 @@ import { pathToRegexp, Key } from 'path-to-regexp';
 import { InjectEntityModel } from '@midwayjs/typeorm';
 import { ResHandlerFactory } from '../handler/res.handler'
 import { ResType } from "../enums/res.type"
-
+const fs = require('fs');
+const file = fs.createWriteStream('./outPut.txt');
+let logger = new console.Console(file, file);
 @Provide()
 @Scope(ScopeEnum.Singleton)
 export class ApiServerService {
@@ -50,9 +52,7 @@ export class ApiServerService {
 
         if (!api) {
             this.apiMap.forEach((v, k) => {
-                console.log("k = ", k, ", path = ", path, ", pathname = ", path + ApiServerService.SPLITOR + method)
                 if (pathToRegexp(k).exec(path + ApiServerService.SPLITOR + method)) {
-                    console.log(k + ' matched ' + path)
                     api = v
                     return
                 }
@@ -60,7 +60,10 @@ export class ApiServerService {
         }
 
         if (api) {
-            console.log('matched', api)
+            // console.log(ctx.request.body)
+            
+logger.log(JSON.stringify(ctx.request.body));
+
             const handler = ResHandlerFactory.getResHandler(ResType[api.resType])
             if (handler) {
                 const pathVariables = this.getPathParams(api.path, path)
@@ -76,7 +79,6 @@ export class ApiServerService {
                         pathVariables
                     }
                 }
-                console.log(handler, handler.handle(api.response, params))
                 return handler.handle(api.response, params) || 'response handle error'
             }
         }

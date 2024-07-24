@@ -12,7 +12,6 @@ export class ApiController {
 
     @All('/**')
     async api() {
-        console.log(this.ctx)
         return await this.apiServerService.mapping(this.ctx)
             || { success: false, message: '404 Not Found', data: `${this.ctx.method} ${this.ctx.url.replace('/api', '')} perhaps not defined` };
     }

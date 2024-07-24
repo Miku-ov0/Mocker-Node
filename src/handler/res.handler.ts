@@ -58,7 +58,6 @@ class JSResHandler implements ResHandler {
         params.console = console
         params.axios = axios
         const sandBoxContext = vm.createContext(params)
-        console.log('ctx', sandBoxContext)
 
         const r = script.runInContext(sandBoxContext)
         return sandBoxContext.resp?.body || r
